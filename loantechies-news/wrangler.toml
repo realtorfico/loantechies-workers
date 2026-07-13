@@ -1,0 +1,27 @@
+name = "loantechies-news"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+# Cron: once a day at 13:10 UTC (~6:10am PT / 5:10am PST). Off the top of the hour so we don't race
+# every other cron on the platform. The site reads the cached result, so the exact minute is moot.
+[triggers]
+crons = ["10 13 * * *"]
+
+# KV namespace holding the aggregated article list (key: "latest"). The cron Worker WRITES here; the
+# public site's worker.js READS the same namespace (GET /api/articles), so both wrangler configs must
+# reference the SAME namespace id.
+#
+# Create it once (dashboard: Storage & Databases → KV → Create namespace "loantechies-news", or
+# `npx wrangler kv namespace create NEWS`), then paste its id below AND into the site's wrangler.jsonc.
+[[kv_namespaces]]
+binding = "NEWS"
+id = "9797eba371124bb188b5d0d43e08c395"
+
+# Optional: protect the manual ?run=1 re-trigger. Set with `npx wrangler secret put TRIGGER_TOKEN`
+# (or as a dashboard secret). When set, manual runs require &token=<value>; the cron path ignores it.
+
+# REQUIRED for the AI "Loan Techies take" summaries: the Cloudflare Workers AI binding. Free (uses the
+# Workers AI daily allowance), no API key. Dashboard: the Worker → Settings → Bindings → Add →
+# Workers AI → Variable name `AI`. Without it the run still works and items carry no summary.
+[ai]
+binding = "AI"
