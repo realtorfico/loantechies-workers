@@ -1,12 +1,14 @@
 /**
  * LoanTechies Rate Email Ingest — Cloudflare Email Worker
  *
- * Triggered when rates@loantechies.com receives a forwarded daily-rates email. Handles TWO distinct
- * senders that both land at this same address: LoanFactory's own daily rate email, and (added
- * 2026-07-10) Rocket Pro's correspondent rate sheet forwarded through the same LoanFactory inbox.
- * Both are content-gated by subject, parsed independently, and POSTed to the backend tagged with
- * their own `source` so they're stored (and compared) separately — see ExternalRates.cs /
+ * Triggered when rates@loantechies.com receives a forwarded daily-rates email. Handles THREE distinct
+ * senders that all land at this same address: LoanFactory's own daily rate email; (added 2026-07-10)
+ * Rocket Pro's correspondent rate sheet; and (added 2026-07-13) Provident Funding's daily WHOLESALE
+ * rate grid. All are content-gated by subject and parsed independently. LoanFactory + Rocket Pro are
+ * consumer rate+APR and POST to console/rates/loanfactory/ingest — see ExternalRates.cs /
  * LoanFactoryRatesProvider.cs for how the backend picks the lower of the two per loan product.
+ * Provident is WHOLESALE (restricted, no APR) and POSTs to its OWN private endpoint
+ * (console/rates/provident/ingest, key PROVIDENT_INGEST_KEY) — see the Provident section below.
  *
  * Rocket Pro's rate sheet is a JPG IMAGE, not HTML (confirmed by reading the raw .eml source
  * 2026-07-10 — there is no table markup anywhere, an earlier HTML-table parser attempt never had a
@@ -49,6 +51,8 @@ export default {
       await handleLoanFactory(message, env, subject);
     } else if (subject.includes('rocket pro') && subject.includes('rates')) {
       await handleRocketPro(message, env, subject);
+    } else if (subject.includes('provident')) {
+      await handleProvident(message, env, subject);
     } else {
       console.log(`Email Worker: ignored (from=${message.from}, subject=${subject})`);
     }
@@ -305,6 +309,122 @@ function arrayBufferToBase64(buf) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
   return btoa(binary);
+}
+
+// ── Provident Funding (WHOLESALE — restricted) ────────────────────────────────
+//
+// Provident's daily wholesale rate email is forwarded through the same inbox and lands here too.
+// UNLIKE LoanFactory/Rocket Pro it is a WHOLESALE rate/price GRID (rate → points), carries NO APR,
+// and is marked "Real Estate Professionals only — distribution to the general public is not allowed."
+// So it is an INTERNAL pricing input: this handler POSTs the RAW grid to a DIFFERENT, PRIVATE backend
+// endpoint (console/rates/provident/ingest) with its OWN secret (PROVIDENT_INGEST_KEY). The backend
+// derives LoanTechies' own advertisable rate + APR (see ProvidentPricing.cs / ProvidentRates.cs); only
+// that DERIVED number is ever public. Two format differences from the others: the body is base64
+// (not quoted-printable), and the data is a per-product grid keyed by Provident's product codes.
+
+const PROVIDENT_URL =
+  'https://softician-api.azurewebsites.net/api/console/rates/provident/ingest';
+
+// Provident product code → our template key. Extend as more products are advertised.
+const PROVIDENT_PRODUCTS = { A1010: 'Conforming30F', A1020: 'Conforming15F' };
+
+async function handleProvident(message, env, subject) {
+  const raw = await new Response(message.raw).text();
+  const html = extractProvidentHtml(raw);
+  if (!html) {
+    console.error('Email Worker: could not extract HTML from Provident email');
+    return;
+  }
+
+  const data = parseProvidentEmail(html);
+  const products = data.grids ? Object.keys(data.grids) : [];
+  if (!products.length) {
+    console.log('Email Worker: ignored Provident email — no known product grids parsed');
+    return;
+  }
+
+  console.log(`Email Worker: parsed Provident grids [${products.join(', ')}] posted ${data.postedDate}`);
+  await postToProvident(data, env);
+}
+
+// Provident's body is a single text/html part with Content-Transfer-Encoding: base64 (the existing
+// decode() only handles quoted-printable). Decode as UTF-8. Falls back to using the body as-is if it
+// already looks like HTML (defensive against a future non-base64 delivery).
+function extractProvidentHtml(raw) {
+  const htmlTypeIdx = raw.search(/content-type:\s*text\/html/i);
+  if (htmlTypeIdx === -1) return null;
+  const headerEnd = raw.indexOf('\r\n\r\n', htmlTypeIdx);
+  if (headerEnd === -1) return null;
+
+  let body = raw.slice(headerEnd + 4);
+  const boundaryIdx = body.indexOf('\r\n--');
+  if (boundaryIdx !== -1) body = body.slice(0, boundaryIdx);
+  body = body.trim();
+
+  if (body.includes('<html') || body.includes('<table')) return body;  // already decoded
+  try {
+    const bin = atob(body.replace(/\s+/g, ''));
+    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch (err) {
+    console.error(`Email Worker: Provident base64 decode failed — ${err.message}`);
+    return null;
+  }
+}
+
+// Parse the wholesale grid. Each product's table is a `class="rate-table"` block containing a product
+// code (A####) then rows of four percentages: rate, base pricing, 21-day, 30-day. Mirrors the local
+// Parse-ProvidentRates.ps1: a rate row is a non-negative %; the three prices follow each rate.
+function parseProvidentEmail(html) {
+  let postedDate = '';
+  const pm = html.match(/Posted:\s*([0-9/]+)/i);
+  if (pm) postedDate = pm[1];
+
+  const grids = {};
+  const blocks = html.split('class="rate-table"');
+  for (let i = 1; i < blocks.length; i++) {
+    const text = stripTags(blocks[i]);
+    const codeMatch = text.match(/\b(A\d{4})\b/);
+    if (!codeMatch || !PROVIDENT_PRODUCTS[codeMatch[1]]) continue;
+
+    const tokens = text.match(/-?\d+\.\d{3}%/g) || [];
+    const rows = [];
+    let j = 0;
+    while (j < tokens.length) {
+      if (!tokens[j].startsWith('-') && j + 3 < tokens.length) {
+        rows.push({
+          rate:   parseFloat(tokens[j].replace('%', '')),
+          base:   parseFloat(tokens[j + 1].replace('%', '')),
+          lock21: parseFloat(tokens[j + 2].replace('%', '')),
+          lock30: parseFloat(tokens[j + 3].replace('%', '')),
+        });
+        j += 4;
+      } else {
+        j++;
+      }
+    }
+    if (rows.length) grids[PROVIDENT_PRODUCTS[codeMatch[1]]] = rows;
+  }
+
+  return { source: 'provident', postedDate, grids };
+}
+
+async function postToProvident(data, env) {
+  const key = env.PROVIDENT_INGEST_KEY || env.BACKEND_INGEST_KEY;
+  const res = await fetch(PROVIDENT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Webhook-Key': key },
+    body: JSON.stringify(data),
+  });
+
+  if (res.ok) {
+    const json = await res.json();
+    console.log(`Email Worker: ingested Provident successfully (date=${json.date})`);
+  } else {
+    const text = await res.text();
+    console.error(`Email Worker: Provident ingest failed ${res.status} — ${text}`);
+    throw new Error(`Backend returned ${res.status}`);
+  }
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────

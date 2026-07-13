@@ -10,9 +10,10 @@ dashboard editor and deploy from there.
 
 ## Workers
 
-- `loanfactory-email-ingest/` — Email Worker on rates@loantechies.com. Parses LoanFactory's daily
-  rate email and Rocket Pro's correspondent rate sheet (JPG, via Workers AI vision) into the
-  backend's rate table.
+- `email-ingest/` — Email Worker on rates@loantechies.com. Content-gates by subject and parses three
+  daily rate senders: LoanFactory's rate email, Rocket Pro's correspondent rate sheet (JPG, via
+  Workers AI vision), and Provident Funding's WHOLESALE rate grid (base64 HTML — restricted, POSTs to
+  its own private backend endpoint). (Repo folder renamed from `loanfactory-email-ingest` 2026-07-13.)
 - `loantechies-news/` — Cron Worker (daily). Aggregates curated RSS feeds into KV for the site's
   /news page and homepage widget, with free Workers AI summaries.
 - `softician-api-keepalive/` — Cron Worker (every 5 min). Pings the Azure Functions backend's

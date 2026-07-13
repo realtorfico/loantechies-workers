@@ -1,0 +1,28 @@
+name = "email-ingest"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+[ai]
+binding = "AI"
+
+# This is a Cloudflare Email Worker — it handles the `email` event, not HTTP requests.
+# No [triggers] block needed; routing is configured in the Cloudflare Email Routing dashboard:
+#   Email Routing → Routes → rates@loantechies.com → Send to Worker → email-ingest
+#   (the existing deployed Worker may still be named "loanfactory-email-ingest" until migrated;
+#    the repo folder was renamed to email-ingest 2026-07-13 to reflect the 3 senders it now handles)
+#
+# Handles THREE email formats at this one address (content-gated by subject, see src/index.js):
+# LoanFactory's own daily rate email; (added 2026-07-10) Rocket Pro's correspondent rate sheet; and
+# (added 2026-07-13) Provident Funding's daily WHOLESALE rate grid. All forwarded through the same
+# LoanFactory inbox — no separate route/Worker needed for any of them.
+# Rocket Pro's rate sheet is a JPG image — its extraction uses the [ai] binding above (Workers AI
+# vision model), so unlike LoanFactory's plain HTML parsing, that binding must also be added via the
+# Cloudflare dashboard for this deployment method: Worker → Settings → Bindings tab (NOT Variables &
+# Secrets — Workers AI is a resource binding, same category as KV/D1, not a secret string) → Add →
+# Workers AI → bind as "AI". The [ai] block here only documents intent; dashboard-pasted Workers don't
+# read wrangler.toml at all.
+
+# Required secrets — set via Dashboard (Worker Settings → Variables & Secrets → Add Secret):
+#   BACKEND_INGEST_KEY    (must match LOANFACTORY_INGEST_KEY in Azure Functions app settings)
+#   PROVIDENT_INGEST_KEY  (must match PROVIDENT_INGEST_KEY in Azure Functions app settings; the
+#                          Provident handler falls back to BACKEND_INGEST_KEY if this is unset)
