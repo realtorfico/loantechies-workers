@@ -340,8 +340,10 @@ async function handleProvident(message, env, subject) {
   const products = data.grids ? Object.keys(data.grids) : [];
   if (!products.length) {
     const codes = (html.match(/\bA\d{4}\b/g) || []).slice(0, 8).join(',');
+    const pctTokens = (stripTags(html).match(/-?\d+\.\d{3}%/g) || []).length;
     console.log(`Email Worker: ignored Provident email — no known product grids parsed ` +
-      `(htmlLen=${html.length}, hasRateTable=${html.includes('rate-table')}, codes=[${codes}])`);
+      `(htmlLen=${html.length}, hasRateTable=${html.includes('rate-table')}, ` +
+      `pctTokens=${pctTokens}, codes=[${codes}])`);
     return;
   }
 
@@ -371,22 +373,29 @@ function extractProvidentHtml(raw) {
   return html;
 }
 
-// Parse the wholesale grid. Each product's table is a `class="rate-table"` block containing a product
-// code (A####) then rows of four percentages: rate, base pricing, 21-day, 30-day. Mirrors the local
-// Parse-ProvidentRates.ps1: a rate row is a non-negative %; the three prices follow each rate.
+// Parse the wholesale grid. Anchored to the product CODES (A####), NOT `class="rate-table"` — Gmail's
+// sanitizer strips class attributes on forward (leaving the codes + numbers intact), so class-based
+// splitting fails on forwarded mail. Strip tags to a flat text stream, then for each wanted code read
+// the region up to the next code: a rate row is a non-negative %, followed by its 3 price columns.
 function parseProvidentEmail(html) {
   let postedDate = '';
   const pm = html.match(/Posted:\s*([0-9/]+)/i);
   if (pm) postedDate = pm[1];
 
+  const text = stripTags(html);
   const grids = {};
-  const blocks = html.split('class="rate-table"');
-  for (let i = 1; i < blocks.length; i++) {
-    const text = stripTags(blocks[i]);
-    const codeMatch = text.match(/\b(A\d{4})\b/);
-    if (!codeMatch || !PROVIDENT_PRODUCTS[codeMatch[1]]) continue;
 
-    const tokens = text.match(/-?\d+\.\d{3}%/g) || [];
+  // Ordered positions of every product code in the flat text.
+  const hits = [];
+  const codeRe = /\bA\d{4}\b/g;
+  let m;
+  while ((m = codeRe.exec(text)) !== null) hits.push({ code: m[0], idx: m.index });
+
+  for (let k = 0; k < hits.length; k++) {
+    if (!PROVIDENT_PRODUCTS[hits[k].code]) continue;
+    const end = (k + 1 < hits.length) ? hits[k + 1].idx : text.length;
+    const tokens = text.slice(hits[k].idx, end).match(/-?\d+\.\d{3}%/g) || [];
+
     const rows = [];
     let j = 0;
     while (j < tokens.length) {
@@ -402,7 +411,7 @@ function parseProvidentEmail(html) {
         j++;
       }
     }
-    if (rows.length) grids[PROVIDENT_PRODUCTS[codeMatch[1]]] = rows;
+    if (rows.length) grids[PROVIDENT_PRODUCTS[hits[k].code]] = rows;
   }
 
   return { source: 'provident', postedDate, grids };
