@@ -339,7 +339,9 @@ async function handleProvident(message, env, subject) {
   const data = parseProvidentEmail(html);
   const products = data.grids ? Object.keys(data.grids) : [];
   if (!products.length) {
-    console.log('Email Worker: ignored Provident email — no known product grids parsed');
+    const codes = (html.match(/\bA\d{4}\b/g) || []).slice(0, 8).join(',');
+    console.log(`Email Worker: ignored Provident email — no known product grids parsed ` +
+      `(htmlLen=${html.length}, hasRateTable=${html.includes('rate-table')}, codes=[${codes}])`);
     return;
   }
 
@@ -347,29 +349,26 @@ async function handleProvident(message, env, subject) {
   await postToProvident(data, env);
 }
 
-// Provident's body is a single text/html part with Content-Transfer-Encoding: base64 (the existing
-// decode() only handles quoted-printable). Decode as UTF-8. Falls back to using the body as-is if it
-// already looks like HTML (defensive against a future non-base64 delivery).
+// Provident arrives in TWO shapes: the ORIGINAL direct email is single-part base64 HTML; once
+// forwarded through the Gmail inbox it becomes QUOTED-PRINTABLE (like LoanFactory/Rocket Pro — in QP
+// `class="rate-table"` is written `class=3D"rate-table"`, which broke an earlier base64-only version).
+// Reuse the shared extractHtmlPart (handles multipart + QP decode); if the result is still base64
+// (direct delivery, not QP), decode that as UTF-8.
 function extractProvidentHtml(raw) {
-  const htmlTypeIdx = raw.search(/content-type:\s*text\/html/i);
-  if (htmlTypeIdx === -1) return null;
-  const headerEnd = raw.indexOf('\r\n\r\n', htmlTypeIdx);
-  if (headerEnd === -1) return null;
+  const isQP = /content-transfer-encoding:\s*quoted-printable/i.test(raw);
+  let html = extractHtmlPart(raw, isQP);
+  if (!html) return null;
 
-  let body = raw.slice(headerEnd + 4);
-  const boundaryIdx = body.indexOf('\r\n--');
-  if (boundaryIdx !== -1) body = body.slice(0, boundaryIdx);
-  body = body.trim();
-
-  if (body.includes('<html') || body.includes('<table')) return body;  // already decoded
-  try {
-    const bin = atob(body.replace(/\s+/g, ''));
-    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-    return new TextDecoder('utf-8').decode(bytes);
-  } catch (err) {
-    console.error(`Email Worker: Provident base64 decode failed — ${err.message}`);
-    return null;
+  if (!html.includes('<table') && !html.includes('<html')) {
+    try {
+      const bin = atob(html.replace(/\s+/g, ''));
+      const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+      html = new TextDecoder('utf-8').decode(bytes);
+    } catch (err) {
+      console.error(`Email Worker: Provident base64 fallback decode failed — ${err.message}`);
+    }
   }
+  return html;
 }
 
 // Parse the wholesale grid. Each product's table is a `class="rate-table"` block containing a product
