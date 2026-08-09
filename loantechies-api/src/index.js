@@ -28,6 +28,10 @@ import {
   getRateConfig, getRateConfigDefaults, saveRateConfig, getRateConfigHistory,
   getRateConfigBaseRates, previewRateConfig,
 } from './lib/rateConfigAdmin.js';
+import {
+  requestOtp, verifyOtp, saveLead, esignRequestCode, esignConfirmCode,
+  verifyEmployerAddress, status as estimateStatus, quickStart,
+} from './lib/estimateGate.js';
 import { sendInquiry } from './lib/sendInquiry.js';
 import { emailResults } from './lib/emailResults.js';
 import { subscribeRateAlert, unsubscribeRateAlert, evaluateAndNotify as evaluateRateAlerts } from './lib/rateAlert.js';
@@ -113,6 +117,19 @@ export default {
     if (pathname === '/loans/ratealert/unsubscribe' && method === 'GET') return unsubscribeRateAlert(request, env);
     if (pathname === '/loans/savingsalert' && method === 'POST') return subscribeSavingsAlert(request, env);
     if (pathname === '/loans/savingsalert/unsubscribe' && method === 'GET') return unsubscribeSavingsAlert(request, env);
+
+    // ---- Migrated routes (Phase 3: EstimateGate — email 2FA, E-SIGN, pre-approval save) ----
+    // leads/estimate/status's document list depends on document_uploads, which doesn't migrate
+    // until Phase 4 — see estimateGate.js's status() comment.
+
+    if (pathname === '/leads/estimate/request-otp' && method === 'POST') return requestOtp(request, env);
+    if (pathname === '/leads/estimate/verify' && method === 'POST') return verifyOtp(request, env);
+    if (pathname === '/leads/estimate/save' && method === 'POST') return saveLead(request, env);
+    if (pathname === '/leads/estimate/esign/request-code' && method === 'POST') return esignRequestCode(request, env);
+    if (pathname === '/leads/estimate/esign/confirm-code' && method === 'POST') return esignConfirmCode(request, env);
+    if (pathname === '/leads/estimate/verify-employer-address' && method === 'POST') return verifyEmployerAddress(request, env);
+    if (pathname === '/leads/estimate/status' && method === 'POST') return estimateStatus(request, env);
+    if (pathname === '/leads/estimate/quick-start' && method === 'POST') return quickStart(request, env);
 
     return forwardToAzure(request, env);
   },
