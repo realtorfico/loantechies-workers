@@ -45,6 +45,7 @@ import { subscribeSavingsAlert, unsubscribeSavingsAlert, evaluateAndNotify as ev
 import { checkAndAlertGuardrails } from './lib/zillowCurrentRatesProvider.js';
 import { loadAsync as loadRateConfig } from './lib/rateConfigStore.js';
 import { run as runIncompleteNoticeAutoWithdraw } from './lib/incompleteNoticeAutoWithdraw.js';
+import { getQuestionnairePdf } from './lib/questionnaireFunction.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -153,6 +154,9 @@ export default {
     if (pathname === '/console/savings-alerts' && method === 'GET') return listSavingsAlerts(request, env);
     if (pathname === '/console/savings-alerts/create' && method === 'POST') return createSavingsAlert(request, env);
     if (pathname === '/console/inquiries' && method === 'GET') return listInquiries(request, env);
+
+    // ---- Migrated route: questionnaire PDF (cover page + fillable base form) ----
+    if (pathname === '/loans/questionnaire' && method === 'GET') return getQuestionnairePdf(request, env);
 
     return forwardToAzure(request, env);
   },

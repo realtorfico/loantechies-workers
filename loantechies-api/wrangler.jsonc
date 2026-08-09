@@ -7,13 +7,17 @@
 //
 // Deploy via Cloudflare's git-connected Workers Builds (Wrangler doesn't run locally on this
 // Windows ARM64 machine — see root CLAUDE.md). Connect in the dashboard (Settings > Build):
-// repo loantechies-workers (or wherever this folder lives), branch main, deploy command
-// `npx wrangler deploy`, root directory `Workers/loantechies-api`. This mirrors the pattern
-// already proven for ExamPrep's examprep-api.
+// repo loantechies-workers, branch main, deploy command `npx wrangler deploy`, root directory
+// `loantechies-api` (this repo's root IS the Workers/ folder — no extra prefix). This mirrors the
+// pattern already proven for ExamPrep's examprep-api.
 {
   "name": "loantechies-api",
   "main": "src/index.js",
   "compatibility_date": "2026-08-01",
+  // Bundles the questionnaire cover-page font files and base PDFs directly into the Worker as
+  // Uint8Arrays at build time (see questionnaireFunction.js) — they're static template assets
+  // shipped with the code, not user content, so no R2 round-trip is needed for them.
+  "rules": [{ "type": "Data", "globs": ["**/*.ttf", "**/*.pdf"], "fallthrough": true }],
   "d1_databases": [
     // Create the DB in the dashboard (Workers & Pages > D1 > Create), run schema.sql via its
     // Console tab, then paste the database_id here.
