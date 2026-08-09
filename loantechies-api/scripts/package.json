@@ -1,0 +1,8 @@
+{
+  "name": "loantechies-api-migration-scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@azure/data-tables": "^13.2.2"
+  }
+}

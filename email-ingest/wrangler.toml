@@ -5,6 +5,10 @@ compatibility_date = "2026-06-01"
 [ai]
 binding = "AI"
 
+[[services]]
+binding = "API"
+service = "loantechies-api"
+
 # This is a Cloudflare Email Worker — it handles the `email` event, not HTTP requests.
 # No [triggers] block needed; routing is configured in the Cloudflare Email Routing dashboard:
 #   Email Routing → Routes → rates@loantechies.com → Send to Worker → email-ingest
@@ -23,6 +27,11 @@ binding = "AI"
 # read wrangler.toml at all.
 
 # Required secrets — set via Dashboard (Worker Settings → Variables & Secrets → Add Secret):
-#   BACKEND_INGEST_KEY    (must match LOANFACTORY_INGEST_KEY in Azure Functions app settings)
-#   PROVIDENT_INGEST_KEY  (must match PROVIDENT_INGEST_KEY in Azure Functions app settings; the
+#   BACKEND_INGEST_KEY    (must match LOANFACTORY_INGEST_KEY on the loantechies-api Worker)
+#   PROVIDENT_INGEST_KEY  (must match PROVIDENT_INGEST_KEY on the loantechies-api Worker; the
 #                          Provident handler falls back to BACKEND_INGEST_KEY if this is unset)
+#
+# Required binding — Worker → Settings → Bindings → Add → Service binding:
+#   API → loantechies-api  (both ingest POSTs go through this now; loantechies-api has no public
+#                            hostname, so this binding is the only way to reach it — see the
+#                            Azure→Cloudflare migration plan)

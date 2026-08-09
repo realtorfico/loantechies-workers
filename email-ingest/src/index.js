@@ -16,17 +16,24 @@
  * Cloudflare Workers AI (a vision model reading the image), not string parsing — see handleRocketPro.
  *
  * Required secrets/bindings (Worker Settings → Variables & Secrets, and Settings → Bindings):
- *   BACKEND_INGEST_KEY  — secret, must match the LOANFACTORY_INGEST_KEY Azure Function env var.
+ *   BACKEND_INGEST_KEY  — secret, must match loantechies-api's LOANFACTORY_INGEST_KEY var.
  *   AI                  — Workers AI binding (Bindings tab, NOT Variables & Secrets — it's a resource
  *                          binding like KV/D1, not a secret string). Required for Rocket Pro only;
  *                          LoanFactory's HTML parsing doesn't need it.
+ *   API                 — Service binding to the loantechies-api Worker (Bindings tab → Add →
+ *                          Service binding, variable name "API", service "loantechies-api"). Required
+ *                          since loantechies-api has no public hostname — see the Azure→Cloudflare
+ *                          migration plan. Both ingest POSTs below go through this binding now
+ *                          instead of a public azurewebsites.net URL; the X-Webhook-Key header is
+ *                          still sent for defense in depth even though the binding itself is trusted.
  *
  * Deploy: Cloudflare Dashboard → Workers & Pages → Create Worker → paste this file.
  * Route:  Email Routing (for loantechies.com) → Routes → rates@loantechies.com → Send to Worker.
  */
 
-const BACKEND_URL =
-  'https://softician-api.azurewebsites.net/api/console/rates/loanfactory/ingest';
+// Service-binding requests just need a well-formed URL for routing (env.API.fetch dispatches
+// directly to loantechies-api's fetch handler, not over the network) — host is a placeholder.
+const BACKEND_URL = 'https://loantechies-api.internal/console/rates/loanfactory/ingest';
 
 // LoanFactory sends TWO different daily rate emails that both pass any subject/sender check
 // identically: the real personalized one (anand.vangari@loanfactory.com, scenario ZIP 95377 — the
@@ -322,8 +329,7 @@ function arrayBufferToBase64(buf) {
 // that DERIVED number is ever public. Two format differences from the others: the body is base64
 // (not quoted-printable), and the data is a per-product grid keyed by Provident's product codes.
 
-const PROVIDENT_URL =
-  'https://softician-api.azurewebsites.net/api/console/rates/provident/ingest';
+const PROVIDENT_URL = 'https://loantechies-api.internal/console/rates/provident/ingest';
 
 // Provident product code → our template key. Extend as more products are advertised.
 const PROVIDENT_PRODUCTS = { A1010: 'Conforming30F', A1020: 'Conforming15F' };
@@ -419,7 +425,7 @@ function parseProvidentEmail(html) {
 
 async function postToProvident(data, env) {
   const key = env.PROVIDENT_INGEST_KEY || env.BACKEND_INGEST_KEY;
-  const res = await fetch(PROVIDENT_URL, {
+  const res = await env.API.fetch(PROVIDENT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Webhook-Key': key },
     body: JSON.stringify(data),
@@ -438,7 +444,7 @@ async function postToProvident(data, env) {
 // ── Shared ────────────────────────────────────────────────────────────────────
 
 async function postToBackend(data, env, label) {
-  const res = await fetch(BACKEND_URL, {
+  const res = await env.API.fetch(BACKEND_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

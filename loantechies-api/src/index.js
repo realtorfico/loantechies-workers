@@ -6,6 +6,18 @@
 // migrated route gets an explicit branch ABOVE the forwardToAzure() fallback at the bottom —
 // anything without a branch here transparently rides on Azure until it's ported.
 import { forwardToAzure } from './lib/azureForward.js';
+import { getContactConfig, saveContactConfig } from './lib/contactConfig.js';
+import { getFeatureFlags, saveFeatureFlags } from './lib/featureFlags.js';
+import { getQuestionnaireConfig, saveQuestionnaireConfig } from './lib/questionnaireConfig.js';
+import {
+  getEstimateDefaults, getEstimateDefaultsConsole, saveEstimateDefaults,
+} from './lib/estimateDefaults.js';
+import { getVisitExclusions, saveVisitExclusions } from './lib/visitExclusions.js';
+import { trackVisit, listVisits } from './lib/visits.js';
+import {
+  ingestLoanFactory, getLoanFactorySnapshots, getLoanFactoryLatest,
+  ingestProvident, getProvidentSnapshots,
+} from './lib/externalRates.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -24,8 +36,33 @@ export default {
       });
     }
 
-    // ---- Migrated routes go here, one `if` per route, as each phase lands. ----
-    // (Phase 0: none yet — everything below falls through to Azure.)
+    // ---- Migrated routes (Phase 1: config stores, visits, external rates) ----
+
+    if (pathname === '/site/contact-config' && method === 'GET') return getContactConfig(request, env);
+    if (pathname === '/console/contact-config/save' && method === 'POST') return saveContactConfig(request, env);
+
+    if (pathname === '/site/feature-flags' && method === 'GET') return getFeatureFlags(request, env);
+    if (pathname === '/console/feature-flags/save' && method === 'POST') return saveFeatureFlags(request, env);
+
+    if (pathname === '/console/questionnaire-config' && method === 'GET') return getQuestionnaireConfig(request, env);
+    if (pathname === '/console/questionnaire-config/save' && method === 'POST') return saveQuestionnaireConfig(request, env);
+
+    if (pathname === '/site/estimate-defaults' && method === 'GET') return getEstimateDefaults(request, env);
+    if (pathname === '/console/estimate-defaults' && method === 'GET') return getEstimateDefaultsConsole(request, env);
+    if (pathname === '/console/estimate-defaults/save' && method === 'POST') return saveEstimateDefaults(request, env);
+
+    if (pathname === '/console/visit-exclusions' && method === 'GET') return getVisitExclusions(request, env);
+    if (pathname === '/console/visit-exclusions/save' && method === 'POST') return saveVisitExclusions(request, env);
+
+    if (pathname === '/visits/track' && method === 'POST') return trackVisit(request, env);
+    if (pathname === '/console/visits' && method === 'GET') return listVisits(request, env);
+
+    if (pathname === '/console/rates/loanfactory/ingest' && method === 'POST') return ingestLoanFactory(request, env);
+    if (pathname === '/console/rates/loanfactory' && method === 'GET') return getLoanFactorySnapshots(request, env);
+    if (pathname === '/rates/loanfactory/latest' && method === 'GET') return getLoanFactoryLatest(request, env);
+    if (pathname === '/console/rates/provident/ingest' && method === 'POST') return ingestProvident(request, env);
+    if (pathname === '/console/rates/provident' && method === 'GET') return getProvidentSnapshots(request, env);
+    // console/rates/provident/advertised stays on Azure — needs ProvidentPricing/RegZApr (Phase 2).
 
     return forwardToAzure(request, env);
   },
