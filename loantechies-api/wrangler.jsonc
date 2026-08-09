@@ -25,11 +25,13 @@
     // binding is the ONLY way to reach the file contents.
     { "binding": "DOCUMENTS", "bucket_name": "loantechies-documents" }
   ],
-  // Phase 3: 5-min pulse — Rate Watch / Savings Watch alert evaluation (see index.js's
-  // scheduled()). Matches KeepAliveWarmer.cs's schedule; the Zillow-cache-warming and historical-
-  // rates-cache-warming parts of that C# timer are deliberately NOT replicated — see the
-  // scheduled() handler's own comment for why.
-  "triggers": { "crons": ["*/5 * * * *"] }
+  // Phase 3: two independent schedules, dispatched in index.js's scheduled() by event.cron —
+  //   */5 * * * *  — Rate Watch / Savings Watch alert evaluation, matches KeepAliveWarmer.cs's
+  //                  schedule (the Zillow-cache-warming and historical-rates-cache-warming parts
+  //                  of that C# timer are deliberately NOT replicated — see scheduled()'s comment)
+  //   0 15 * * *   — daily Reg B §1002.9(c) incomplete-notice auto-withdraw sweep, matches
+  //                  IncompleteNoticeAutoWithdraw.cs's TimerTrigger exactly (15:00 UTC, ~8am PT)
+  "triggers": { "crons": ["*/5 * * * *", "0 15 * * *"] }
 
   // Secrets/vars (set via dashboard: Settings > Variables & Secrets, not committed here):
   //   CF_ACCESS_TEAM_DOMAIN     — e.g. yourteam.cloudflareaccess.com (same team as loantechies-admin)

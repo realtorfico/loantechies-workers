@@ -44,6 +44,7 @@ import { subscribeRateAlert, unsubscribeRateAlert, evaluateAndNotify as evaluate
 import { subscribeSavingsAlert, unsubscribeSavingsAlert, evaluateAndNotify as evaluateSavingsAlerts } from './lib/savingsAlert.js';
 import { checkAndAlertGuardrails } from './lib/zillowCurrentRatesProvider.js';
 import { loadAsync as loadRateConfig } from './lib/rateConfigStore.js';
+import { run as runIncompleteNoticeAutoWithdraw } from './lib/incompleteNoticeAutoWithdraw.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -156,13 +157,21 @@ export default {
     return forwardToAzure(request, env);
   },
 
-  // Port of KeepAliveWarmer.cs's 5-min pulse — but only the parts that still apply. The C#
-  // version also warms RatesProvider's historical-chart cache and pre-fetches 4 Zillow
-  // getCurrentRates bucket combos; neither is replicated here: the historical loans/ratesprovider
-  // route hasn't migrated yet (still Azure-forwarded), and zillowCurrentRatesProvider.js
-  // deliberately dropped stale-while-revalidate caching in favor of fetch-fresh-on-demand (see
-  // that module's doc comment) — so there is nothing to pre-warm for it anymore.
+  // Two independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
   async scheduled(event, env, ctx) {
+    if (event.cron === '0 15 * * *') {
+      // Daily, ~8am Pacific — Config/IncompleteNoticeAutoWithdraw.cs's Reg B §1002.9(c) sweep.
+      await runIncompleteNoticeAutoWithdraw(env);
+      return;
+    }
+
+    // Port of KeepAliveWarmer.cs's 5-min pulse — but only the parts that still apply. The C#
+    // version also warms RatesProvider's historical-chart cache and pre-fetches 4 Zillow
+    // getCurrentRates bucket combos; neither is replicated here: the historical
+    // loans/ratesprovider route hasn't migrated yet (still Azure-forwarded), and
+    // zillowCurrentRatesProvider.js deliberately dropped stale-while-revalidate caching in favor
+    // of fetch-fresh-on-demand (see that module's doc comment) — so there is nothing to pre-warm
+    // for it anymore.
     const cfg = await loadRateConfig(env);
     if (cfg) checkAndAlertGuardrails(cfg, env); // fire-and-forget, matches the C#'s own contract
 
