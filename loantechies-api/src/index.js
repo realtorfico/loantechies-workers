@@ -18,6 +18,10 @@ import {
   ingestLoanFactory, getLoanFactorySnapshots, getLoanFactoryLatest,
   ingestProvident, getProvidentSnapshots,
 } from './lib/externalRates.js';
+import {
+  amortizationCalculator, affordabilityCalculator, dtiCalculator, affordabilityEstimator,
+  maxLoanEstimator, prepaymentCalculator, refiCalculator, rentVsBuy,
+} from './lib/calculators.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -62,7 +66,19 @@ export default {
     if (pathname === '/rates/loanfactory/latest' && method === 'GET') return getLoanFactoryLatest(request, env);
     if (pathname === '/console/rates/provident/ingest' && method === 'POST') return ingestProvident(request, env);
     if (pathname === '/console/rates/provident' && method === 'GET') return getProvidentSnapshots(request, env);
-    // console/rates/provident/advertised stays on Azure — needs ProvidentPricing/RegZApr (Phase 2).
+    // console/rates/provident/advertised stays on Azure — needs ProvidentPricing/RegZApr, ported
+    // later in Phase 2 alongside the rate-provider fetch chain.
+
+    // ---- Migrated routes (Phase 2: calculators) ----
+
+    if (pathname === '/loans/amortizationcalculator' && (method === 'GET' || method === 'POST')) return amortizationCalculator(request, env);
+    if (pathname === '/loans/getloanamount' && (method === 'GET' || method === 'POST')) return affordabilityCalculator(request, env);
+    if (pathname === '/loans/dticalculator' && method === 'GET') return dtiCalculator(request, env);
+    if (pathname === '/loans/affordability' && method === 'GET') return affordabilityEstimator(request, env);
+    if (pathname === '/loans/maxloan' && method === 'GET') return maxLoanEstimator(request, env);
+    if (pathname === '/loans/prepaymentcalculator' && (method === 'GET' || method === 'POST')) return prepaymentCalculator(request, env);
+    if (pathname === '/loans/reficalculator' && (method === 'GET' || method === 'POST')) return refiCalculator(request, env);
+    if (pathname === '/loans/rentvsbuy' && method === 'GET') return rentVsBuy(request, env);
 
     return forwardToAzure(request, env);
   },
