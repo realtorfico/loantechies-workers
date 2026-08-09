@@ -1,0 +1,44 @@
+// loantechies-api — Cloudflare Worker replacing the Azure Functions backend (SofticianApi),
+// migrated incrementally. Reached only via a Service Binding from the loantechies and
+// loantechies-admin Pages/Workers projects (their wrangler.jsonc "services" block) — no public
+// hostname needed. Any route not yet natively implemented here transparently forwards to the
+// still-live Azure Function App (src/lib/azureForward.js) so the migration can move one route
+// at a time with zero frontend changes after the initial cutover.
+//
+// Deploy via Cloudflare's git-connected Workers Builds (Wrangler doesn't run locally on this
+// Windows ARM64 machine — see root CLAUDE.md). Connect in the dashboard (Settings > Build):
+// repo loantechies-workers (or wherever this folder lives), branch main, deploy command
+// `npx wrangler deploy`, root directory `Workers/loantechies-api`. This mirrors the pattern
+// already proven for ExamPrep's examprep-api.
+{
+  "name": "loantechies-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "d1_databases": [
+    // Create the DB in the dashboard (Workers & Pages > D1 > Create), run schema.sql via its
+    // Console tab, then paste the database_id here.
+    { "binding": "DB", "database_name": "loantechies", "database_id": "b3abafdf-40fb-47ca-80ea-631e81194d5f" }
+  ],
+  "r2_buckets": [
+    // Replaces the Azure "document-uploads" blob container. No public custom domain — access is
+    // only via short-lived HMAC-signed /documents/:file URLs (src/lib/documentSign.js), so this
+    // binding is the ONLY way to reach the file contents.
+    { "binding": "DOCUMENTS", "bucket_name": "loantechies-documents" }
+  ]
+  // Cron triggers are added in Phase 1+ as timer-triggered routes migrate off Azure — see the
+  // migration plan. Left empty in Phase 0 since nothing scheduled runs natively here yet.
+  // "triggers": { "crons": [] }
+
+  // Secrets/vars (set via dashboard: Settings > Variables & Secrets, not committed here):
+  //   CF_ACCESS_TEAM_DOMAIN     — e.g. yourteam.cloudflareaccess.com (same team as loantechies-admin)
+  //   CF_ACCESS_AUD             — the admin.loantechies.com Access application's Audience tag
+  //   CF_ACCESS_ALLOWED_EMAILS  — optional extra allowlist on top of the Access policy
+  //   TURNSTILE_SECRET          — from the contact form's Turnstile widget
+  //   RESEND_API_KEY            — resend.com, primary/only email path (no SMTP fallback here)
+  //   GOOGLE_ADDRESS_VALIDATION_KEY
+  //   FRED_API_KEY
+  //   ZILLOW_PARTNER_ID
+  //   LOANFACTORY_INGEST_KEY / PROVIDENT_INGEST_KEY — shared secrets for email-ingest's POSTs
+  //   DOCUMENT_SIGNING_SECRET   — random string, HMACs the short-lived /documents/:file URLs
+  //   AZURE_API_ORIGIN          — https://softician-api.azurewebsites.net (fallback target; see azureForward.js)
+}
