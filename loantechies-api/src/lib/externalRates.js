@@ -2,13 +2,9 @@
 // both share one `external_rates` D1 table (source, id) exactly like they share the Azure
 // "ExternalRates" table (PartitionKey=source). Ingest is machine-to-machine (X-Webhook-Key), not
 // Cloudflare Access — see requireIngestKey() in auth.js.
-//
-// Scope: storage/CRUD only (ingest, admin list, public latest for LoanFactory/RocketPro).
-// console/rates/provident/advertised is deliberately NOT ported here — it needs
-// ProvidentPricing.Derive() + RegZApr, which land with the Phase 2 pricing engine. Until then it
-// stays on the Azure-forward path.
 import { ok, badRequest, notFound, serviceUnavailable, readJsonBody, nowSeconds, toIso } from './http.js';
-import { requireAccess, requireIngestKey } from './auth.js';
+import { requireAccess, requireIngestKey, checkAccess } from './auth.js';
+import { derive, defaultProvidentConfig } from './providentPricing.js';
 
 const KNOWN_LOANFACTORY_SOURCES = new Set(['loanfactory', 'rocketpro']);
 
@@ -216,4 +212,57 @@ export async function getLatestGrids(env) {
     grids[key] = (rows || []).map((r) => ({ rate: r.rate, base: r.base, lock21: r.lock21, lock30: r.lock30 }));
   }
   return { grids, date: row.id };
+}
+
+// GET console/rates/provident/advertised — dual auth: a machine READ KEY (for the unattended
+// local poller) OR an admin Access JWT. Returns only LoanTechies' DERIVED numbers (never
+// Provident's restricted wholesale grid), so a machine key is acceptable here even though the raw
+// grid endpoint above stays Access-only.
+export async function getProvidentAdvertised(request, env) {
+  const readKey = env.PROVIDENT_READ_KEY || env.PROVIDENT_INGEST_KEY;
+  const provided = request.headers.get('X-Webhook-Key');
+  const keyOk = !!readKey && provided === readKey;
+  if (!keyOk) {
+    const result = await checkAccess(request, env);
+    if (!result.ok) return new Response(null, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const cfg = defaultProvidentConfig();
+  const comp = Number(url.searchParams.get('comp'));
+  if (Number.isFinite(comp)) cfg.compPct = comp;
+  const loan = Number(url.searchParams.get('loan'));
+  if (Number.isFinite(loan)) cfg.loanAmount = loan;
+  const fees = Number(url.searchParams.get('fees'));
+  if (Number.isFinite(fees)) cfg.fixedFees = fees;
+  const lockQ = url.searchParams.get('lock');
+  if (lockQ === 'Base' || lockQ === '21' || lockQ === '30') cfg.lock = lockQ;
+  const nb = (url.searchParams.get('neverBelowRate') || '').toLowerCase();
+  if (nb === 'true' || nb === 'false') cfg.neverBelowRate = nb === 'true';
+
+  const row = await env.DB.prepare(
+    "SELECT id, posted_date, json FROM external_rates WHERE source = 'provident' ORDER BY id DESC LIMIT 1"
+  ).first();
+  if (!row?.json) return notFound('No Provident rates available yet.');
+
+  let snap;
+  try { snap = JSON.parse(row.json); } catch { return new Response(JSON.stringify({ error: 'Stored snapshot is corrupt.' }), { status: 500, headers: { 'content-type': 'application/json' } }); }
+
+  const advertised = {};
+  for (const [product, rows] of Object.entries(snap.grids || {})) {
+    const gridRows = (rows || []).map((r) => ({ rate: r.rate, base: r.base, lock21: r.lock21, lock30: r.lock30 }));
+    const adv = derive(product, gridRows, cfg);
+    if (adv) advertised[product] = adv;
+  }
+
+  return ok({
+    date: row.id,
+    postedDate: row.posted_date,
+    comp: cfg.compPct,
+    loanAmount: cfg.loanAmount,
+    fixedFees: cfg.fixedFees,
+    lock: cfg.lock,
+    rule: cfg.neverBelowRate ? 'lowest netCost >= 0 (APR >= rate)' : 'net cost closest to $0',
+    advertised,
+  });
 }

@@ -16,12 +16,18 @@ import { getVisitExclusions, saveVisitExclusions } from './lib/visitExclusions.j
 import { trackVisit, listVisits } from './lib/visits.js';
 import {
   ingestLoanFactory, getLoanFactorySnapshots, getLoanFactoryLatest,
-  ingestProvident, getProvidentSnapshots,
+  ingestProvident, getProvidentSnapshots, getProvidentAdvertised,
 } from './lib/externalRates.js';
 import {
   amortizationCalculator, affordabilityCalculator, dtiCalculator, affordabilityEstimator,
   maxLoanEstimator, prepaymentCalculator, refiCalculator, rentVsBuy,
 } from './lib/calculators.js';
+import { getEstimatedRate } from './lib/estimatedRate.js';
+import { getRatesCurrent } from './lib/ratesCurrentFunction.js';
+import {
+  getRateConfig, getRateConfigDefaults, saveRateConfig, getRateConfigHistory,
+  getRateConfigBaseRates, previewRateConfig,
+} from './lib/rateConfigAdmin.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -66,8 +72,7 @@ export default {
     if (pathname === '/rates/loanfactory/latest' && method === 'GET') return getLoanFactoryLatest(request, env);
     if (pathname === '/console/rates/provident/ingest' && method === 'POST') return ingestProvident(request, env);
     if (pathname === '/console/rates/provident' && method === 'GET') return getProvidentSnapshots(request, env);
-    // console/rates/provident/advertised stays on Azure — needs ProvidentPricing/RegZApr, ported
-    // later in Phase 2 alongside the rate-provider fetch chain.
+    if (pathname === '/console/rates/provident/advertised' && method === 'GET') return getProvidentAdvertised(request, env);
 
     // ---- Migrated routes (Phase 2: calculators) ----
 
@@ -79,6 +84,20 @@ export default {
     if (pathname === '/loans/prepaymentcalculator' && (method === 'GET' || method === 'POST')) return prepaymentCalculator(request, env);
     if (pathname === '/loans/reficalculator' && (method === 'GET' || method === 'POST')) return refiCalculator(request, env);
     if (pathname === '/loans/rentvsbuy' && method === 'GET') return rentVsBuy(request, env);
+
+    // ---- Migrated routes (Phase 2: pricing engine — estimate + rate config admin) ----
+    // Read (loans/estimatedrate, loans/rates/current) and write (console/rate-config*) sides
+    // migrated together in the same push — splitting them would let admin edits silently stop
+    // taking effect (write to Azure, read from D1).
+
+    if (pathname === '/loans/estimatedrate' && method === 'GET') return getEstimatedRate(request, env);
+    if (pathname === '/loans/rates/current' && method === 'GET') return getRatesCurrent(request, env);
+    if (pathname === '/console/rate-config' && method === 'GET') return getRateConfig(request, env);
+    if (pathname === '/console/rate-config/defaults' && method === 'GET') return getRateConfigDefaults(request, env);
+    if (pathname === '/console/rate-config/save' && method === 'POST') return saveRateConfig(request, env);
+    if (pathname === '/console/rate-config/history' && method === 'GET') return getRateConfigHistory(request, env);
+    if (pathname === '/console/rate-config/base-rates' && method === 'GET') return getRateConfigBaseRates(request, env);
+    if (pathname === '/console/rate-config/preview' && method === 'POST') return previewRateConfig(request, env);
 
     return forwardToAzure(request, env);
   },
