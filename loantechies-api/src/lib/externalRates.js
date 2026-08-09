@@ -7,7 +7,7 @@
 // console/rates/provident/advertised is deliberately NOT ported here — it needs
 // ProvidentPricing.Derive() + RegZApr, which land with the Phase 2 pricing engine. Until then it
 // stays on the Azure-forward path.
-import { ok, badRequest, notFound, serviceUnavailable, readJsonBody, nowSeconds } from './http.js';
+import { ok, badRequest, notFound, serviceUnavailable, readJsonBody, nowSeconds, toIso } from './http.js';
 import { requireAccess, requireIngestKey } from './auth.js';
 
 const KNOWN_LOANFACTORY_SOURCES = new Set(['loanfactory', 'rocketpro']);
@@ -94,7 +94,7 @@ export async function getLoanFactorySnapshots(request, env) {
     date: r.id,
     scenario: r.scenario,
     emailDate: r.email_date,
-    savedUtc: r.saved_at,
+    savedUtc: toIso(r.saved_at),
     rates: r.json ? JSON.parse(r.json) : null,
   }));
   return ok({ snapshots });
@@ -114,7 +114,7 @@ export async function getLoanFactoryLatest(request, env) {
     date: row.id,
     scenario: row.scenario,
     emailDate: row.email_date,
-    savedUtc: row.saved_at,
+    savedUtc: toIso(row.saved_at),
     rates: row.json ? JSON.parse(row.json) : null,
   });
 }
@@ -164,7 +164,7 @@ export async function getProvidentSnapshots(request, env) {
   const snapshots = (results || []).map((r) => ({
     date: r.id,
     postedDate: r.posted_date,
-    savedUtc: r.saved_at,
+    savedUtc: toIso(r.saved_at),
     grid: r.json ? JSON.parse(r.json) : null,
   }));
   return ok({ snapshots });

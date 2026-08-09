@@ -9,7 +9,7 @@
 // Now that this Worker sits behind Cloudflare's own edge, CF-Connecting-IP is always the real
 // client IP — no header-chain reconstruction needed.
 import { loadExclusions, matchesIp, isExcludedVisit } from './visitExclusions.js';
-import { ok, badRequest, nowSeconds } from './http.js';
+import { ok, badRequest, nowSeconds, toIso } from './http.js';
 import { requireAccess } from './auth.js';
 
 const MAX_RETAINED = 5000;
@@ -174,8 +174,8 @@ export async function listVisits(request, env) {
 
   const visits = all.slice(0, limit).map((v) => ({
     sessionId: v.id,
-    firstSeenUtc: v.first_seen_at,
-    lastSeenUtc: v.last_seen_at,
+    firstSeenUtc: toIso(v.first_seen_at),
+    lastSeenUtc: toIso(v.last_seen_at),
     durationMs: v.duration_ms,
     page: v.page,
     pages: v.pages ? v.pages.split('\n') : [],

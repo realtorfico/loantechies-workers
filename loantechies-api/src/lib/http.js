@@ -29,3 +29,14 @@ export async function readJsonBody(request) {
 export function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
+
+// D1 stores timestamps as epoch-second INTEGERs, but every `*Utc`-suffixed field the frontend
+// consumes (admin's fmtDate()/fmtDateShort() in wwwroot/js/api.js, used across the whole admin
+// site) expects `new Date(x)`-parseable input — an ISO 8601 string, matching what ASP.NET's
+// default JSON serializer produced for the old C# DateTime responses. `new Date(bareNumber)`
+// always means milliseconds, so a raw epoch-seconds integer silently parses as 1970 — every route
+// response that includes a `*Utc` field MUST go through this, not just return the D1 column as-is.
+export function toIso(epochSeconds) {
+  if (epochSeconds == null) return null;
+  return new Date(epochSeconds * 1000).toISOString();
+}
