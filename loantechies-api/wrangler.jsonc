@@ -25,7 +25,7 @@
   ],
   "r2_buckets": [
     // Replaces the Azure "document-uploads" blob container. No public custom domain — access is
-    // only via short-lived HMAC-signed /documents/:file URLs (src/lib/documentSign.js), so this
+    // only via short-lived HMAC-signed /documents?key=... URLs (src/lib/documentSign.js), so this
     // binding is the ONLY way to reach the file contents.
     { "binding": "DOCUMENTS", "bucket_name": "loantechies-documents" }
   ],
@@ -47,7 +47,8 @@
   //   FRED_API_KEY
   //   ZILLOW_PARTNER_ID
   //   LOANFACTORY_INGEST_KEY / PROVIDENT_INGEST_KEY — shared secrets for email-ingest's POSTs
-  //   DOCUMENT_SIGNING_SECRET   — random string, HMACs the short-lived /documents/:file URLs
+  //   DOCUMENT_SIGNING_SECRET   — random string, HMACs the short-lived /documents?key=... URLs
+  //                               (Phase 4 — generate with e.g. `openssl rand -hex 32` before deploy)
   //   AZURE_API_ORIGIN          — https://softician-api.azurewebsites.net (fallback target; see azureForward.js)
   //   INQUIRY_TO_EMAIL / GMAIL_USER — business inbox for leads/alerts (GMAIL_USER as fallback address only, no SMTP)
   //   PUBLIC_SITE_ORIGIN        — optional, defaults to https://www.loantechies.com; used to build alert-email unsubscribe links

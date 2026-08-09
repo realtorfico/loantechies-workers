@@ -46,6 +46,9 @@ import { checkAndAlertGuardrails } from './lib/zillowCurrentRatesProvider.js';
 import { loadAsync as loadRateConfig } from './lib/rateConfigStore.js';
 import { run as runIncompleteNoticeAutoWithdraw } from './lib/incompleteNoticeAutoWithdraw.js';
 import { getQuestionnairePdf } from './lib/questionnaireFunction.js';
+import { uploadDocument } from './lib/documentUploadFunction.js';
+import { listUploads, getUploadFileUrl } from './lib/adminDocumentUploads.js';
+import { serveDocument } from './lib/documentSign.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -157,6 +160,12 @@ export default {
 
     // ---- Migrated route: questionnaire PDF (cover page + fillable base form) ----
     if (pathname === '/loans/questionnaire' && method === 'GET') return getQuestionnairePdf(request, env);
+
+    // ---- Phase 4: document uploads to R2 ----
+    if (pathname === '/loans/documentupload' && method === 'POST') return uploadDocument(request, env);
+    if (pathname === '/console/uploads' && method === 'GET') return listUploads(request, env);
+    if (pathname === '/console/uploads/file-url' && method === 'GET') return getUploadFileUrl(request, env);
+    if (pathname === '/documents' && method === 'GET') return serveDocument(request, env);
 
     return forwardToAzure(request, env);
   },
