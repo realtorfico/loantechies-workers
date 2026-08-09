@@ -119,6 +119,33 @@ export async function getLoanFactoryLatest(request, env) {
   });
 }
 
+// Internal reader for the pricing engine (LoanFactoryRatesProvider) — up to maxDays most recent
+// snapshots for `source`, newest-first, each exposing only conventional[] (nonQm out of scope for
+// the estimate-rate engine). Empty array on any failure/no data — callers must treat that as
+// "no data for this source," never a crash. Mirrors Admin/ExternalRates.cs's GetRecentSnapshotsAsync.
+export async function getRecentSnapshots(env, maxDays, source) {
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT id, json FROM external_rates WHERE source = ? ORDER BY id DESC LIMIT ?'
+    ).bind(source, Math.max(1, maxDays)).all();
+
+    const out = [];
+    for (const r of results || []) {
+      if (!r.json) continue;
+      let parsed;
+      try { parsed = JSON.parse(r.json); } catch { continue; }
+      if (!parsed?.conventional) continue;
+      out.push({
+        date: r.id,
+        conventional: parsed.conventional.map((row) => ({ loanType: row.loanType, rate: row.rate, apr: row.apr })),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 // ---------------- Provident ----------------
 
 // POST console/rates/provident/ingest — machine key (PROVIDENT_INGEST_KEY)
@@ -168,4 +195,25 @@ export async function getProvidentSnapshots(request, env) {
     grid: r.json ? JSON.parse(r.json) : null,
   }));
   return ok({ snapshots });
+}
+
+// Internal reader for ProvidentRatesProvider — the single latest grid (by date), parsed into the
+// { rate, base, lock21, lock30 } row shape providentPricing.js's derive() expects. Mirrors
+// Admin/ProvidentRates.cs's GetLatestGridsAsync. Returns { grids: null, date: null } on any
+// failure/no data.
+export async function getLatestGrids(env) {
+  const row = await env.DB.prepare(
+    "SELECT id, json FROM external_rates WHERE source = 'provident' ORDER BY id DESC LIMIT 1"
+  ).first();
+  if (!row) return { grids: null, date: null };
+  if (!row.json) return { grids: null, date: row.id };
+
+  let snap;
+  try { snap = JSON.parse(row.json); } catch { return { grids: null, date: row.id }; }
+
+  const grids = {};
+  for (const [key, rows] of Object.entries(snap.grids || {})) {
+    grids[key] = (rows || []).map((r) => ({ rate: r.rate, base: r.base, lock21: r.lock21, lock30: r.lock30 }));
+  }
+  return { grids, date: row.id };
 }
