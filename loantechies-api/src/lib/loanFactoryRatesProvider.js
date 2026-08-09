@@ -14,6 +14,7 @@ import { getRecentSnapshots } from './externalRates.js';
 import { loadAsync as loadProvident } from './providentRatesProvider.js';
 import { shouldAlert } from './alertCooldown.js';
 import { businessInbox, sendViaResend } from './emailer.js';
+import { roundHalfEven } from './mathRound.js';
 
 // Fixed lookup: LoanFactory's raw loanType label -> (loanType, occupancy). Verified live
 // 2026-07-02; owner confirmed these exact strings are stable.
@@ -49,7 +50,7 @@ function key(loanType, occupancy) {
 }
 
 function round4(v) {
-  return Math.round(v * 10000) / 10000;
+  return roundHalfEven(v, 4);
 }
 
 // ---- Pure Conventional formula chain (public — unit-testable with a synthetic branches map) ----

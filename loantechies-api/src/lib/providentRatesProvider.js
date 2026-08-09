@@ -12,6 +12,7 @@ import { getLatestGrids } from './externalRates.js';
 import { derive, defaultProvidentConfig } from './providentPricing.js';
 import { computeLlpaDelta } from './rateConfig.js';
 import { pacificDateOf, daysBetween } from './pacificDate.js';
+import { roundHalfEven } from './mathRound.js';
 
 const MAX_FAILOVER_DAYS = 7; // matches loanFactoryRatesProvider's Rocket Pro policy
 const PRIMARY_CONV_KEY = 'Conventional::Primary Residence';
@@ -24,7 +25,7 @@ export function anchorAdjustment(cfg) {
 }
 
 function round4(v) {
-  return Math.round(v * 10000) / 10000;
+  return roundHalfEven(v, 4);
 }
 
 export async function loadAsync(cfg, env) {

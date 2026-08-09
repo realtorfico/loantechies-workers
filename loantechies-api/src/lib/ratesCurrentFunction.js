@@ -4,6 +4,7 @@ import { ok, toIso } from './http.js';
 import { loadAsync as loadRateConfig } from './rateConfigStore.js';
 import { getQuote } from './loanFactoryRatesProvider.js';
 import { getLatest as getLatestPmms } from './pmmsProvider.js';
+import { roundHalfEven } from './mathRound.js';
 
 const COMBOS = [
   { loanType: 'Conventional', occupancy: 'Primary Residence', term: 30, refinance: false, key: 'conventionalPrimaryPurchase30' },
@@ -19,7 +20,7 @@ const COMBOS = [
 ];
 
 function round4(v) {
-  return Math.round(v * 10000) / 10000;
+  return roundHalfEven(v, 4);
 }
 
 export async function getRatesCurrent(request, env) {

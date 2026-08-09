@@ -15,10 +15,10 @@ import {
   CURRENT_GUARDRAIL_VERSION,
 } from './rateConfig.js';
 import { getQuote } from './loanFactoryRatesProvider.js';
+import { roundHalfEven } from './mathRound.js';
 
 function round(v, dp = 4) {
-  const m = 10 ** dp;
-  return Math.round(v * m) / m;
+  return roundHalfEven(v, dp);
 }
 
 // GET console/rate-config — seeds defaults on first read so a single page visit makes the
@@ -199,7 +199,7 @@ export async function previewRateConfig(request, env) {
 
   return ok({
     eligible: true,
-    isEstimated: sc.credit === 'Not sure' || undefined,
+    isEstimated: sc.credit === 'Not sure' ? true : null,
     marketRate: round(quote.rate),
     marketApr: quote.apr != null ? round(quote.apr) : null,
     rateSource: quote.source,

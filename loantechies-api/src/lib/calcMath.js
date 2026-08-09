@@ -1,5 +1,6 @@
 // Port of Utils/CalcMath.cs — shared math/parse helpers + sanity bounds for the loan calculators.
 // Formulas kept bit-for-bit equivalent to the C# (same zero-rate branches, same rounding points).
+import { roundHalfEven } from './mathRound.js';
 
 export function getDouble(value, defaultValue = 0) {
   const n = parseFloat(value);
@@ -48,4 +49,4 @@ export const isSaneEconomicPercent = (pct) => pct >= MIN_ECONOMIC_PERCENT && pct
 export const isSanePropertyTaxRate = (pct) => pct >= 0 && pct <= MAX_PROPERTY_TAX_PERCENT;
 export const isSanePercentZeroToHundred = (pct) => pct >= 0 && pct <= 100;
 
-export const round2 = (v) => Math.round(v * 100) / 100;
+export const round2 = (v) => roundHalfEven(v, 2);

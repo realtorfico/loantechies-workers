@@ -2,6 +2,7 @@
 // Anonymous everywhere, matching the C# (AuthorizationLevel.Anonymous on every route).
 import { badRequest, ok } from './http.js';
 import * as M from './calcMath.js';
+import { roundHalfEven } from './mathRound.js';
 
 // GET query params, falling back to a JSON body field for routes that also accept POST — mirrors
 // each C# handler's `paramStr ??= data?.field?.ToString()` pattern. Body is read once per request.
@@ -344,7 +345,7 @@ function getRemainingPeriods(principal, term, rate, paymentsPerTerm, addlPayment
   const logOf1PlusRate = Math.log(1 + rateBy100TimesPaymentsPerTerm);
   const remainingPeriods = complexLog / logOf1PlusRate;
 
-  return { expectedPayment, remainingPeriods: Math.round(remainingPeriods) };
+  return { expectedPayment, remainingPeriods: roundHalfEven(remainingPeriods) };
 }
 
 // ---- GET/POST loans/reficalculator ----

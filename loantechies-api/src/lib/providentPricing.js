@@ -2,6 +2,7 @@
 // rate/price grid into a single ADVERTISABLE note rate + Reg Z APR per product, under a fixed
 // Lender-Paid Comp (LPC) model. Side-effect-free.
 import { solveApr } from './regZApr.js';
+import { roundHalfEven } from './mathRound.js';
 
 // cfg shape: { compPct = 1.25, loanAmount = 800000, fixedFees = 1225, lock = "30", neverBelowRate = false }
 export function defaultProvidentConfig() {
@@ -61,13 +62,13 @@ export function derive(product, rows, cfg) {
 
   return {
     rate: best.rate,
-    apr: apr != null ? Math.round(apr * 1000) / 1000 : null,
+    apr: apr != null ? roundHalfEven(apr, 3) : null,
     term,
     wholesalePrice: price,
-    rebatePts: Math.round(rebate * 1000) / 1000,
+    rebatePts: roundHalfEven(rebate, 3),
     compPts: cfg.compPct,
-    borrowerCredit: Math.round(((rebate - cfg.compPct) / 100.0) * cfg.loanAmount * 100) / 100,
+    borrowerCredit: roundHalfEven(((rebate - cfg.compPct) / 100.0) * cfg.loanAmount, 2),
     fixedFees: cfg.fixedFees,
-    netToBorrower: Math.round(netCostVal * 100) / 100,
+    netToBorrower: roundHalfEven(netCostVal, 2),
   };
 }

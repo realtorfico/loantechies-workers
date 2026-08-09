@@ -2,6 +2,7 @@
 // FRACTION of loan amount (provably loan-amount-independent — see the C# doc comment). Pure,
 // side-effect-free, built on calcMath's annuity primitives.
 import { monthlyPI, loanFromPayment } from './calcMath.js';
+import { roundHalfEven } from './mathRound.js';
 
 // Back-solve the implied finance-charge fraction from a genuine (noteRate, apr) pair at a known
 // term — e.g. a LoanFactory-quoted Purchase-30yr-Fixed branch. Compute once per branch.
@@ -19,7 +20,7 @@ export function solveFinanceChargeFraction(notePct, aprPct, termMonths, loanAmou
 // Returns notePct unchanged when the fraction is non-positive (no fee to redistribute). Returns
 // null — never a fabricated number — if the bisection fails to bracket a solution.
 export function solveApr(notePct, termMonths, financeChargeFraction, loanAmount = 100000.0) {
-  if (financeChargeFraction <= 0) return Math.round(notePct * 10000) / 10000;
+  if (financeChargeFraction <= 0) return roundHalfEven(notePct, 4);
 
   const noteRate = notePct / 1200.0;
   const payment = monthlyPI(loanAmount, noteRate, termMonths);
@@ -46,5 +47,5 @@ export function solveApr(notePct, termMonths, financeChargeFraction, loanAmount 
     else hi = mid;
   }
 
-  return Math.round(mid * 1200.0 * 10000) / 10000;
+  return roundHalfEven(mid * 1200.0, 4);
 }

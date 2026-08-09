@@ -9,11 +9,12 @@ import { evaluateEligibility, computeLlpaDelta, computeGovAdj, computeCltvAdj, c
 import { getQuote } from './loanFactoryRatesProvider.js';
 import { shouldAlert } from './alertCooldown.js';
 import { businessInbox, sendViaResend } from './emailer.js';
+import { roundHalfEven } from './mathRound.js';
 
 const CONFIG_ALERT_COOLDOWN_MINUTES = 60;
 
 function round4(v) {
-  return Math.round(v * 10000) / 10000;
+  return roundHalfEven(v, 4);
 }
 
 export async function getEstimatedRate(request, env) {
@@ -79,7 +80,7 @@ export async function getEstimatedRate(request, env) {
   if ((url.searchParams.get('ladder') || '').trim().toLowerCase() === 'true') {
     const rungs = computeLadder(cfg, adjustedRate, adjustedApr, aprAvailable, term, loanType);
     ladder = rungs.map((r) => ({
-      rate: r.rate, apr: r.apr, aprApprox: r.aprApprox || undefined, points: r.points, par: r.par || undefined,
+      rate: r.rate, apr: r.apr, aprApprox: r.aprApprox ? true : null, points: r.points, par: r.par ? true : null,
     }));
   }
 
@@ -87,8 +88,8 @@ export async function getEstimatedRate(request, env) {
     eligible: true,
     rate: adjustedRate,
     apr: aprAvailable ? adjustedApr : null,
-    fallback: rateSource === 'config-fallback' || undefined,
-    isEstimated: isEstimated || undefined,
+    fallback: rateSource === 'config-fallback' ? true : null,
+    isEstimated: isEstimated ? true : null,
     marketRate: round4(marketRate),
     rateOffset: 0.0, // LoanFactory formula shift is already baked into marketRate — see rateConfig.js doc comment
     llpaDelta: round4(llpaDelta),

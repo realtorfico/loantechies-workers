@@ -16,6 +16,7 @@
 //   - RefiGuardrails.Arm7 / Arm5 (ARM dropped — CheckConventionalRefiGuardrails only checks Yr15)
 // If a stored config still has these legacy keys from before this migration, they're simply
 // ignored here — never read, never required, never re-validated.
+import { roundHalfEven } from './mathRound.js';
 
 export const CREDIT_TIERS = ['780+', '760-779', '740-759', '720-739', '700-719', '680-699', '660-679', '640-659', '620-639'];
 export const LTV_COLUMN_LABELS = ['≤60', '60.01-70', '70.01-75', '75.01-80', '80.01-85', '85.01-90', '90.01-95', '95.01-97'];
@@ -225,9 +226,9 @@ export function computeLadder(cfg, parRate, parApr, parAprKnown, term, loanType 
     const isPar = s === 0;
     const apr = rate + aprSpread + points * aprPerPoint;
     rungs.push({
-      rate: Math.round(rate * 10000) / 10000,
-      points: Math.round(points * 10000) / 10000,
-      apr: Math.round(apr * 10000) / 10000,
+      rate: roundHalfEven(rate, 4),
+      points: roundHalfEven(points, 4),
+      apr: roundHalfEven(apr, 4),
       aprApprox: !isPar || !parAprKnown,
       par: isPar,
     });
@@ -329,7 +330,7 @@ function matrixDelta(cfg, matrix, creditLabel, ltv) {
   const anchorRow = matrix?.[anchorTier];
   if (anchorRow && anchorCol < anchorRow.length) anchorVal = anchorRow[anchorCol];
 
-  return Math.round(((row[col] - anchorVal) / 4.0) * 1000000) / 1000000;
+  return roundHalfEven((row[col] - anchorVal) / 4.0, 6);
 }
 
 // Alert-only guardrail check for the 15yr-Fixed refi product (the only one still checked post-ARM
