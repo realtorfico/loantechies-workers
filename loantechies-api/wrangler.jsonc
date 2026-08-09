@@ -24,10 +24,12 @@
     // only via short-lived HMAC-signed /documents/:file URLs (src/lib/documentSign.js), so this
     // binding is the ONLY way to reach the file contents.
     { "binding": "DOCUMENTS", "bucket_name": "loantechies-documents" }
-  ]
-  // Cron triggers are added in Phase 1+ as timer-triggered routes migrate off Azure — see the
-  // migration plan. Left empty in Phase 0 since nothing scheduled runs natively here yet.
-  // "triggers": { "crons": [] }
+  ],
+  // Phase 3: 5-min pulse — Rate Watch / Savings Watch alert evaluation (see index.js's
+  // scheduled()). Matches KeepAliveWarmer.cs's schedule; the Zillow-cache-warming and historical-
+  // rates-cache-warming parts of that C# timer are deliberately NOT replicated — see the
+  // scheduled() handler's own comment for why.
+  "triggers": { "crons": ["*/5 * * * *"] }
 
   // Secrets/vars (set via dashboard: Settings > Variables & Secrets, not committed here):
   //   CF_ACCESS_TEAM_DOMAIN     — e.g. yourteam.cloudflareaccess.com (same team as loantechies-admin)
@@ -41,4 +43,6 @@
   //   LOANFACTORY_INGEST_KEY / PROVIDENT_INGEST_KEY — shared secrets for email-ingest's POSTs
   //   DOCUMENT_SIGNING_SECRET   — random string, HMACs the short-lived /documents/:file URLs
   //   AZURE_API_ORIGIN          — https://softician-api.azurewebsites.net (fallback target; see azureForward.js)
+  //   INQUIRY_TO_EMAIL / GMAIL_USER — business inbox for leads/alerts (GMAIL_USER as fallback address only, no SMTP)
+  //   PUBLIC_SITE_ORIGIN        — optional, defaults to https://www.loantechies.com; used to build alert-email unsubscribe links
 }

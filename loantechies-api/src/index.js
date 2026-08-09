@@ -28,6 +28,12 @@ import {
   getRateConfig, getRateConfigDefaults, saveRateConfig, getRateConfigHistory,
   getRateConfigBaseRates, previewRateConfig,
 } from './lib/rateConfigAdmin.js';
+import { sendInquiry } from './lib/sendInquiry.js';
+import { emailResults } from './lib/emailResults.js';
+import { subscribeRateAlert, unsubscribeRateAlert, evaluateAndNotify as evaluateRateAlerts } from './lib/rateAlert.js';
+import { subscribeSavingsAlert, unsubscribeSavingsAlert, evaluateAndNotify as evaluateSavingsAlerts } from './lib/savingsAlert.js';
+import { checkAndAlertGuardrails } from './lib/zillowCurrentRatesProvider.js';
+import { loadAsync as loadRateConfig } from './lib/rateConfigStore.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -99,9 +105,29 @@ export default {
     if (pathname === '/console/rate-config/base-rates' && method === 'GET') return getRateConfigBaseRates(request, env);
     if (pathname === '/console/rate-config/preview' && method === 'POST') return previewRateConfig(request, env);
 
+    // ---- Migrated routes (Phase 3: inquiries + rate/savings alerts) ----
+
+    if (pathname === '/utils/sendinquiry' && method === 'POST') return sendInquiry(request, env);
+    if (pathname === '/utils/emailresults' && method === 'POST') return emailResults(request, env);
+    if (pathname === '/loans/ratealert' && method === 'POST') return subscribeRateAlert(request, env);
+    if (pathname === '/loans/ratealert/unsubscribe' && method === 'GET') return unsubscribeRateAlert(request, env);
+    if (pathname === '/loans/savingsalert' && method === 'POST') return subscribeSavingsAlert(request, env);
+    if (pathname === '/loans/savingsalert/unsubscribe' && method === 'GET') return unsubscribeSavingsAlert(request, env);
+
     return forwardToAzure(request, env);
   },
 
-  // Cron dispatch is added once the first timer-triggered route migrates (Phase 3+) — see
-  // wrangler.jsonc's commented-out "triggers" block and the migration plan's cron mapping table.
+  // Port of KeepAliveWarmer.cs's 5-min pulse — but only the parts that still apply. The C#
+  // version also warms RatesProvider's historical-chart cache and pre-fetches 4 Zillow
+  // getCurrentRates bucket combos; neither is replicated here: the historical loans/ratesprovider
+  // route hasn't migrated yet (still Azure-forwarded), and zillowCurrentRatesProvider.js
+  // deliberately dropped stale-while-revalidate caching in favor of fetch-fresh-on-demand (see
+  // that module's doc comment) — so there is nothing to pre-warm for it anymore.
+  async scheduled(event, env, ctx) {
+    const cfg = await loadRateConfig(env);
+    if (cfg) checkAndAlertGuardrails(cfg, env); // fire-and-forget, matches the C#'s own contract
+
+    await evaluateRateAlerts(env);
+    await evaluateSavingsAlerts(env);
+  },
 };
