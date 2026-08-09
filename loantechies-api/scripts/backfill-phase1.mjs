@@ -98,7 +98,34 @@ function tableClient(tableName) {
 
 // --- app_config: 5 specific PK="config" rows (skip estimated-rate/history/alert-cooldown — those
 // are Phase 2/3 concerns, not Phase 1) ------------------------------------------------------------
-const PHASE1_CONFIG_KEYS = ['visit-exclusions', 'feature-flags', 'questionnaire', 'estimate-defaults', 'contact'];
+// Azure's Json blob is Newtonsoft's default PascalCase serialization of the C# DTO (no camelCase
+// naming strategy configured anywhere in SofticianApi — verified). The Worker's read handlers
+// expect camelCase (matching what the admin UI/frontend actually consume, same as the C# API
+// layer's own explicit re-shaping in each Get handler) — so each blob needs its casing transformed
+// on the way into D1, not just copied verbatim.
+const CONFIG_TRANSFORMS = {
+  'contact': (raw) => ({
+    callEnabled: raw.CallEnabled, phone: raw.Phone,
+    smsEnabled: raw.SmsEnabled, sms: raw.Sms,
+    whatsappEnabled: raw.WhatsappEnabled, whatsapp: raw.Whatsapp,
+    calendlyEnabled: raw.CalendlyEnabled, calendlyUrl: raw.CalendlyUrl,
+    callbackEnabled: raw.CallbackEnabled, message: raw.Message,
+    headline: raw.Headline, subtext: raw.Subtext,
+    showEstimateBanner: raw.ShowEstimateBanner,
+  }),
+  'feature-flags': (raw) => ({ preApprovalEnabled: raw.PreApprovalEnabled }),
+  'questionnaire': (raw) => ({ returnEmail: raw.ReturnEmail }),
+  'estimate-defaults': (raw) => ({
+    fields: Object.fromEntries(
+      Object.entries(raw.Fields || {}).map(([k, v]) => [k, { default: v.Default, min: v.Min, max: v.Max }])
+    ),
+  }),
+  'visit-exclusions': (raw) => ({
+    ips: raw.Ips || [],
+    nameRules: (raw.NameRules || []).map((r) => ({ name: r.Name, location: r.Location })),
+  }),
+};
+const PHASE1_CONFIG_KEYS = Object.keys(CONFIG_TRANSFORMS);
 
 async function backfillAppConfig() {
   console.log('\n=== app_config ===');
@@ -116,10 +143,12 @@ async function backfillAppConfig() {
       }
       throw e;
     }
+    const raw = entity.Json ? JSON.parse(entity.Json) : {};
+    const camelCased = JSON.stringify(CONFIG_TRANSFORMS[rk](raw));
     await d1Exec(
       `INSERT INTO app_config (key, json, version, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET json=excluded.json, version=excluded.version, updated_at=excluded.updated_at, updated_by=excluded.updated_by`,
-      [rk, entity.Json || '{}', entity.Version || 1, toEpoch(entity.UpdatedUtc, `app_config/${rk}`), entity.UpdatedBy || null]
+      [rk, camelCased, entity.Version || 1, toEpoch(entity.UpdatedUtc, `app_config/${rk}`), entity.UpdatedBy || null]
     );
     console.log(`  wrote ${rk}`);
     n++;
@@ -184,7 +213,7 @@ async function backfillVisits() {
       [
         e.rowKey,
         toEpoch(e.FirstSeenUtc, `visits/${e.rowKey}`), toEpoch(e.LastSeenUtc, `visits/${e.rowKey}`),
-        e.DurationMs || 0, e.Page || '', e.Zip || '', e.City || '', e.Region || '',
+        Number(e.DurationMs || 0), e.Page || '', e.Zip || '', e.City || '', e.Region || '',
         e.LeadId || '', e.Lang || '', e.Referrer || '', e.Ip || '', e.UserAgent || '', e.Pages || '',
       ]
     );
