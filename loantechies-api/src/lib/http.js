@@ -40,3 +40,15 @@ export function toIso(epochSeconds) {
   if (epochSeconds == null) return null;
   return new Date(epochSeconds * 1000).toISOString();
 }
+
+// Shared admin list-endpoint helpers — mirrors AdminApi.cs's QInt/Page<T>.
+export function clampInt(raw, dflt, min, max) {
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(Math.max(n, min), max);
+}
+
+export function paginate(all, page, pageSize) {
+  const items = all.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
+  return { total: all.length, page, pageSize, items };
+}

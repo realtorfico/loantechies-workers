@@ -32,6 +32,12 @@ import {
   requestOtp, verifyOtp, saveLead, esignRequestCode, esignConfirmCode,
   verifyEmployerAddress, status as estimateStatus, quickStart,
 } from './lib/estimateGate.js';
+import { emailRate, unsubscribeLeadEmail } from './lib/leadRateEmail.js';
+import { setPreApprovalStatus } from './lib/leadPreApprovalStatus.js';
+import { getStats } from './lib/adminStats.js';
+import { listLeads, saveLead as adminSaveLead, deleteLead as adminDeleteLead } from './lib/adminLeads.js';
+import { listRateAlerts, createRateAlert, listSavingsAlerts, createSavingsAlert } from './lib/adminAlerts.js';
+import { listInquiries } from './lib/adminInquiries.js';
 import { sendInquiry } from './lib/sendInquiry.js';
 import { emailResults } from './lib/emailResults.js';
 import { subscribeRateAlert, unsubscribeRateAlert, evaluateAndNotify as evaluateRateAlerts } from './lib/rateAlert.js';
@@ -130,6 +136,22 @@ export default {
     if (pathname === '/leads/estimate/verify-employer-address' && method === 'POST') return verifyEmployerAddress(request, env);
     if (pathname === '/leads/estimate/status' && method === 'POST') return estimateStatus(request, env);
     if (pathname === '/leads/estimate/quick-start' && method === 'POST') return quickStart(request, env);
+
+    // ---- Migrated routes (Phase 3: admin lead management — urgent, closes the stale-read gap
+    // opened by EstimateGate/RateAlert/SavingsAlert/Inquiry writes moving to D1 above) ----
+
+    if (pathname === '/console/stats' && method === 'GET') return getStats(request, env);
+    if (pathname === '/console/leads' && method === 'GET') return listLeads(request, env);
+    if (pathname === '/console/leads/save' && method === 'POST') return adminSaveLead(request, env);
+    if (pathname === '/console/leads/delete' && method === 'POST') return adminDeleteLead(request, env);
+    if (pathname === '/console/leads/email-rate' && method === 'POST') return emailRate(request, env);
+    if (pathname === '/console/leads/pre-approval-status' && method === 'POST') return setPreApprovalStatus(request, env);
+    if (pathname === '/leads/email/unsubscribe' && (method === 'GET' || method === 'POST')) return unsubscribeLeadEmail(request, env);
+    if (pathname === '/console/rate-alerts' && method === 'GET') return listRateAlerts(request, env);
+    if (pathname === '/console/rate-alerts/create' && method === 'POST') return createRateAlert(request, env);
+    if (pathname === '/console/savings-alerts' && method === 'GET') return listSavingsAlerts(request, env);
+    if (pathname === '/console/savings-alerts/create' && method === 'POST') return createSavingsAlert(request, env);
+    if (pathname === '/console/inquiries' && method === 'GET') return listInquiries(request, env);
 
     return forwardToAzure(request, env);
   },
