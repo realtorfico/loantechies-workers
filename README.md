@@ -13,20 +13,21 @@ Cloudflare dashboard editor (Quick Edit Workers) or push to the connected branch
 
 ## Workers
 
-- `loantechies-api/` — Backend Worker replacing SofticianApi (Azure Functions), migrated one route
-  at a time — see the Azure→Cloudflare migration plan. Reached only via a Service Binding from the
-  `loantechies` and `loantechies-admin` Pages/Workers projects; anything not yet natively
-  implemented transparently forwards to the still-live Azure Function App
-  (`src/lib/azureForward.js`).
+- `loantechies-api/` — Backend Worker replacing SofticianApi (Azure Functions); every route and
+  cron is now ported (see the Azure→Cloudflare migration plan). Reached only via a Service Binding
+  from the `loantechies` and `loantechies-admin` Pages/Workers projects. `src/lib/azureForward.js`
+  still exists as a fallback for anything not natively implemented, but the Azure Function App
+  itself was STOPPED 2026-08-10 (confirmed via `console/azure-fallback` traffic logging showing
+  nothing genuinely relied on it) — full resource teardown still pending.
 - `email-ingest/` — Email Worker on rates@loantechies.com. Content-gates by subject and parses three
   daily rate senders: LoanFactory's rate email, Rocket Pro's correspondent rate sheet (JPG, via
   Workers AI vision), and Provident Funding's WHOLESALE rate grid (base64 HTML — restricted, POSTs to
   its own private backend endpoint). (Repo folder renamed from `loanfactory-email-ingest` 2026-07-13.)
 - `loantechies-news/` — Cron Worker (daily). Aggregates curated RSS feeds into KV for the site's
   /news page and homepage widget, with free Workers AI summaries.
-- `softician-api-keepalive/` — Cron Worker (every 5 min). Pings the Azure Functions backend's
-  /api/health to prevent cold starts. Retired once the Azure backend is fully decommissioned
-  (Workers don't have this cold-start problem).
+
+`softician-api-keepalive/` (pinged the Azure host's /api/health every 5 min to prevent cold
+starts) was retired and deleted 2026-08-10 once the Azure Function App it existed for was stopped.
 
 ## Secrets
 
