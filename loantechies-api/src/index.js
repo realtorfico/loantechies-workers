@@ -50,6 +50,10 @@ import { uploadDocument } from './lib/documentUploadFunction.js';
 import { listUploads, getUploadFileUrl } from './lib/adminDocumentUploads.js';
 import { serveDocument } from './lib/documentSign.js';
 import { listAzureFallbackHits } from './lib/adminAzureFallback.js';
+import { ratesProvider } from './lib/ratesProvider.js';
+import { run as runRateSnapshotTimer } from './lib/rateSnapshotTimer.js';
+import { run as runLlpaReviewReminder } from './lib/llpaReviewReminder.js';
+import { run as runConformingLimitReminder } from './lib/conformingLimitReminder.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -171,24 +175,39 @@ export default {
     // ---- Phase 6 prep: visibility into what's still hitting the Azure fallback ----
     if (pathname === '/console/azure-fallback' && method === 'GET') return listAzureFallbackHits(request, env);
 
+    // ---- Phase 6: last unported HTTP route (historical rate-chart data) ----
+    if (pathname === '/loans/ratesprovider' && (method === 'GET' || method === 'POST')) return ratesProvider(request, env);
+
     return forwardToAzure(request, env, ctx);
   },
 
-  // Two independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
+  // Four independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
   async scheduled(event, env, ctx) {
     if (event.cron === '0 15 * * *') {
-      // Daily, ~8am Pacific — Config/IncompleteNoticeAutoWithdraw.cs's Reg B §1002.9(c) sweep.
+      // Daily, ~8am Pacific — two unrelated C# timers happened to share this UTC slot, so they
+      // still run back-to-back here: Config/IncompleteNoticeAutoWithdraw.cs's Reg B §1002.9(c)
+      // sweep, then Loans/RateSnapshotTimer.cs's daily rate-history snapshot.
       await runIncompleteNoticeAutoWithdraw(env);
+      await runRateSnapshotTimer(env);
+      return;
+    }
+    if (event.cron === '0 9 1 * *') {
+      // Monthly, 1st @ 9am UTC — Config/LlpaReviewReminder.cs.
+      await runLlpaReviewReminder(env);
+      return;
+    }
+    if (event.cron === '0 9 1 12 *') {
+      // Yearly, Dec 1 @ 9am UTC — Config/ConformingLimitReminder.cs.
+      await runConformingLimitReminder(env);
       return;
     }
 
     // Port of KeepAliveWarmer.cs's 5-min pulse — but only the parts that still apply. The C#
     // version also warms RatesProvider's historical-chart cache and pre-fetches 4 Zillow
-    // getCurrentRates bucket combos; neither is replicated here: the historical
-    // loans/ratesprovider route hasn't migrated yet (still Azure-forwarded), and
-    // zillowCurrentRatesProvider.js deliberately dropped stale-while-revalidate caching in favor
-    // of fetch-fresh-on-demand (see that module's doc comment) — so there is nothing to pre-warm
-    // for it anymore.
+    // getCurrentRates bucket combos; neither is replicated here: ratesProvider.js and
+    // zillowCurrentRatesProvider.js both deliberately dropped the C#'s stale-while-revalidate
+    // caching in favor of a plain per-isolate TTL cache (see each module's own doc comment) — so
+    // there is nothing to pre-warm for either anymore.
     const cfg = await loadRateConfig(env);
     if (cfg) checkAndAlertGuardrails(cfg, env); // fire-and-forget, matches the C#'s own contract
 
