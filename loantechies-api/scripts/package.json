@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@azure/data-tables": "^13.2.2"
+    "@aws-sdk/client-s3": "^3.1106.0",
+    "@azure/data-tables": "^13.2.2",
+    "@azure/storage-blob": "^12.33.0"
   }
 }
