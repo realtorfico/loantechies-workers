@@ -181,24 +181,23 @@ export default {
     return forwardToAzure(request, env, ctx);
   },
 
-  // Three independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
+  // Two independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
+  // Deliberately still just 2 (the same count this Worker already had before Phase 6's cron work)
+  // — the account-wide 5-cron-trigger cap (Workers Free; error code 10072) turned out to have
+  // less headroom than even a 3rd trigger here needed, given the other cron Workers already
+  // running on this account (the keepalive pinger, the news aggregator). Every job below now
+  // rides on the two slots that were already fitting.
   async scheduled(event, env, ctx) {
     if (event.cron === '0 15 * * *') {
-      // Daily, ~8am Pacific — two unrelated C# timers happened to share this UTC slot, so they
-      // still run back-to-back here: Config/IncompleteNoticeAutoWithdraw.cs's Reg B §1002.9(c)
-      // sweep, then Loans/RateSnapshotTimer.cs's daily rate-history snapshot.
+      // Daily, ~8am Pacific. Runs, in order: Config/IncompleteNoticeAutoWithdraw.cs's Reg B
+      // §1002.9(c) sweep; Loans/RateSnapshotTimer.cs's daily rate-history snapshot; and, date-
+      // gated so they only actually fire on their real calendar day, the two former-separate-
+      // cron reminders — LlpaReviewReminder.cs (1st of the month) and ConformingLimitReminder.cs
+      // (Dec 1). The 6-hour shift from their original 9am UTC slot to this one's 15:00 UTC is
+      // inconsequential for a monthly/yearly admin reminder email.
       await runIncompleteNoticeAutoWithdraw(env);
       await runRateSnapshotTimer(env);
-      return;
-    }
-    if (event.cron === '0 9 * * *') {
-      // Daily @ 9am UTC, internally date-gated to also cover the monthly (LlpaReviewReminder,
-      // 1st of the month) and yearly (ConformingLimitReminder, Dec 1) C# timers on ONE Cloudflare
-      // trigger slot instead of two. Workers Free caps at 5 cron triggers per ACCOUNT (not per
-      // Worker) — this account already runs other cron Workers (the keepalive pinger, the news
-      // aggregator), so minimizing trigger count here matters more than it would in isolation;
-      // see memory/commit history for the account hitting that cap with the original 1-slot-per-
-      // schedule design.
+
       const now = new Date();
       const day = now.getUTCDate();
       const month = now.getUTCMonth() + 1; // 1-12
