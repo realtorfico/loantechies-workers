@@ -186,3 +186,12 @@ CREATE TABLE alert_cooldowns (
   kind TEXT PRIMARY KEY,
   last_fired_at INTEGER NOT NULL
 );
+
+CREATE TABLE azure_fallback_hits (
+  path TEXT NOT NULL,
+  method TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  PRIMARY KEY (path, method)
+);

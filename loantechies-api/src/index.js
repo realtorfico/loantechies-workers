@@ -49,6 +49,7 @@ import { getQuestionnairePdf } from './lib/questionnaireFunction.js';
 import { uploadDocument } from './lib/documentUploadFunction.js';
 import { listUploads, getUploadFileUrl } from './lib/adminDocumentUploads.js';
 import { serveDocument } from './lib/documentSign.js';
+import { listAzureFallbackHits } from './lib/adminAzureFallback.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -167,7 +168,10 @@ export default {
     if (pathname === '/console/uploads/file-url' && method === 'GET') return getUploadFileUrl(request, env);
     if (pathname === '/documents' && method === 'GET') return serveDocument(request, env);
 
-    return forwardToAzure(request, env);
+    // ---- Phase 6 prep: visibility into what's still hitting the Azure fallback ----
+    if (pathname === '/console/azure-fallback' && method === 'GET') return listAzureFallbackHits(request, env);
+
+    return forwardToAzure(request, env, ctx);
   },
 
   // Two independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.

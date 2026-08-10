@@ -245,3 +245,19 @@ CREATE TABLE alert_cooldowns (
   kind            TEXT PRIMARY KEY,  -- caller-chosen alert kind
   last_fired_at   INTEGER NOT NULL
 );
+
+-- ── Azure fallback traffic log (src/lib/azureForward.js) ───────────────────────────────────
+-- No Azure equivalent — new for the Cloudflare migration. Every request forwardToAzure() actually
+-- forwards gets upserted here (aggregated by path+method, not one row per hit) so we can confirm
+-- REAL zero fallback traffic before Phase 6 decommissions the Azure Function App, and see exactly
+-- which route is still relied on if it isn't zero yet. Deliberately does NOT capture the
+-- softician-api-keepalive Cloudflare cron Worker's health pings — that Worker calls Azure
+-- directly, bypassing this Worker's router entirely, so it was never going to show up here.
+CREATE TABLE azure_fallback_hits (
+  path            TEXT NOT NULL,
+  method          TEXT NOT NULL,
+  count           INTEGER NOT NULL DEFAULT 0,
+  first_seen_at   INTEGER NOT NULL,
+  last_seen_at    INTEGER NOT NULL,
+  PRIMARY KEY (path, method)
+);
