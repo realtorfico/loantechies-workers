@@ -29,7 +29,11 @@
     // binding is the ONLY way to reach the file contents.
     { "binding": "DOCUMENTS", "bucket_name": "loantechies-documents" }
   ],
-  // Four independent schedules, dispatched in index.js's scheduled() by event.cron —
+  // Three independent schedules, dispatched in index.js's scheduled() by event.cron. Kept to 3
+  // (not 4) deliberately: Workers Free caps at 5 cron triggers per ACCOUNT, not per Worker, and
+  // this account already runs other cron Workers (the keepalive pinger, the news aggregator) —
+  // going to 4 triggers here hit that account-wide cap on deploy (error code 10072). The monthly
+  // + yearly reminders share one daily slot instead, gated internally by calendar date.
   //   */5 * * * *   — Rate Watch / Savings Watch alert evaluation, matches KeepAliveWarmer.cs's
   //                   schedule (the Zillow-cache-warming and historical-rates-cache-warming parts
   //                   of that C# timer are deliberately NOT replicated — see scheduled()'s comment)
@@ -37,11 +41,14 @@
   //                   (IncompleteNoticeAutoWithdraw.cs) + the daily rate-history snapshot
   //                   (RateSnapshotTimer.cs) — two unrelated C# timers that happened to share
   //                   this UTC slot (15:00 UTC, ~8am PT)
-  //   0 9 1 * *     — monthly: LlpaReviewReminder.cs's "go compare the LLPA table against Fannie
-  //                   Mae" nudge (1st of the month, 9am UTC)
-  //   0 9 1 12 *    — yearly: ConformingLimitReminder.cs's "go check CA conforming limits against
-  //                   FHFA" nudge (Dec 1, 9am UTC)
-  "triggers": { "crons": ["*/5 * * * *", "0 15 * * *", "0 9 1 * *", "0 9 1 12 *"] }
+  //   0 9 * * *     — daily @ 9am UTC, but scheduled()'s handler only actually runs the two jobs
+  //                   below on their real calendar day, both formerly separate Cloudflare cron
+  //                   slots:
+  //                     - day 1 of any month  -> LlpaReviewReminder.cs's "go compare the LLPA
+  //                       table against Fannie Mae" nudge
+  //                     - Dec 1 only          -> ConformingLimitReminder.cs's "go check CA
+  //                       conforming limits against FHFA" nudge
+  "triggers": { "crons": ["*/5 * * * *", "0 15 * * *", "0 9 * * *"] }
 
   // Secrets/vars (set via dashboard: Settings > Variables & Secrets, not committed here):
   //   CF_ACCESS_TEAM_DOMAIN     — e.g. yourteam.cloudflareaccess.com (same team as loantechies-admin)

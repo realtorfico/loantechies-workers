@@ -181,7 +181,7 @@ export default {
     return forwardToAzure(request, env, ctx);
   },
 
-  // Four independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
+  // Three independent cron schedules dispatched by event.cron — see wrangler.jsonc's triggers.crons.
   async scheduled(event, env, ctx) {
     if (event.cron === '0 15 * * *') {
       // Daily, ~8am Pacific — two unrelated C# timers happened to share this UTC slot, so they
@@ -191,14 +191,19 @@ export default {
       await runRateSnapshotTimer(env);
       return;
     }
-    if (event.cron === '0 9 1 * *') {
-      // Monthly, 1st @ 9am UTC — Config/LlpaReviewReminder.cs.
-      await runLlpaReviewReminder(env);
-      return;
-    }
-    if (event.cron === '0 9 1 12 *') {
-      // Yearly, Dec 1 @ 9am UTC — Config/ConformingLimitReminder.cs.
-      await runConformingLimitReminder(env);
+    if (event.cron === '0 9 * * *') {
+      // Daily @ 9am UTC, internally date-gated to also cover the monthly (LlpaReviewReminder,
+      // 1st of the month) and yearly (ConformingLimitReminder, Dec 1) C# timers on ONE Cloudflare
+      // trigger slot instead of two. Workers Free caps at 5 cron triggers per ACCOUNT (not per
+      // Worker) — this account already runs other cron Workers (the keepalive pinger, the news
+      // aggregator), so minimizing trigger count here matters more than it would in isolation;
+      // see memory/commit history for the account hitting that cap with the original 1-slot-per-
+      // schedule design.
+      const now = new Date();
+      const day = now.getUTCDate();
+      const month = now.getUTCMonth() + 1; // 1-12
+      if (day === 1) await runLlpaReviewReminder(env);
+      if (month === 12 && day === 1) await runConformingLimitReminder(env);
       return;
     }
 
